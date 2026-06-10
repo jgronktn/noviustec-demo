@@ -4,13 +4,17 @@ AI-powered bookkeeping control center for SMB executives. Currently in early
 development, dogfooded against the founder's own startup's books.
 
 > **This is the demo deployment**, a separate fork of the production
-> `noviustec` repo. It runs on its own server under
-> `demo.noviustec.com` / `api-demo.noviustec.com` with the
-> `demo.noviustec.com` Postmark inbound subdomain, but **shares the same
-> Anthropic API key and Postmark server token** as production (see
-> `.env`). Code is identical to prod except for the deployment identity
-> (domains, systemd service name, GitHub remote). Keep this fork's config
-> separate from prod's — don't point demo at prod's domains or vice versa.
+> `noviustec` repo. It runs on the **same physical box as production**
+> (`159.223.131.121` — all four of `api`/`app`/`api-demo`/`demo`
+> `.noviustec.com` resolve there), isolated only at the OS level via a
+> dedicated `demo` user. It serves `demo.noviustec.com` /
+> `api-demo.noviustec.com` with the `demo.noviustec.com` Postmark inbound
+> subdomain, and **shares the same Anthropic API key and Postmark server
+> token** as production (see `.env`). Code is identical to prod except for
+> the deployment identity (domains, systemd service name, GitHub remote,
+> and **`PORT=3001`** so it doesn't collide with prod's `:3000`). Keep this
+> fork's config separate from prod's — don't point demo at prod's domains
+> or vice versa.
 
 ## What we're building
 
@@ -54,7 +58,7 @@ Browser → demo.noviustec.com (frontend, static HTML/JS)
 ↓ fetch (CORS)
 → api-demo.noviustec.com (nginx + TLS)
 ↓ proxy
-→ Node :3000 (Fastify, systemd service noviustec-demo-api)
+→ Node :3001 (Fastify, systemd service noviustec-demo-api; prod uses :3000)
 ↓
 → Files on disk, Anthropic API, Postmark webhooks
 Postmark Inbound Parse
@@ -137,7 +141,7 @@ These are settled. Don't relitigate without strong reason; see
   query primitives. Prevents hallucinated field names and uncontrolled cost.
 - **Per-user sandboxing.** Each company's files live under
   `backend/companies/{companyId}/` (resolved relative to the deployed
-  backend directory — `/home/noviustec/backend/companies/...` in
+  backend directory — `/home/demo/backend/companies/...` in
   production). Strict path validation via a `resolveSafe()` helper.
 - **Native tools, not MCP.** Filesystem and ledger operations are implemented
   as native Anthropic tool definitions inside the Node process. MCP would
@@ -170,7 +174,7 @@ When writing code in this repo:
 - This fork has its own GitHub repo (`noviustec-demo`), separate from prod's
   `noviustec` repo — push demo work there, not to prod
 - Develop locally, commit to git, push to GitHub
-- Server deploys from GitHub via `git pull` in `/home/noviustec/` followed
+- Server deploys from GitHub via `git pull` in `/home/demo/` followed
   by `npm install` (if deps changed) and `sudo systemctl restart noviustec-demo-api`
 - Never edit files directly on the server (`api-demo.noviustec.com`)
 - The `scripts/deploy-backend.sh` and `scripts/deploy-frontend.sh` scripts
@@ -179,18 +183,20 @@ When writing code in this repo:
 
 ### Server layout
 
-The demo runs on its own dedicated server, reusing the `noviustec` user
-convention (no separate demo user — nothing else runs on this box). Just as
-`~/code/demo/` is the repo root locally, `/home/noviustec/` is the repo root
-on the demo server (cloned directly into the `noviustec` user's home directory).
+The demo runs under a dedicated `demo` user, isolated from prod's
+`noviustec` user (separate home, permissions, and files — easy to wipe and
+recreate without touching prod). Just as `~/code/demo/` is the repo root
+locally, `/home/demo/` is the repo root on the server (cloned directly into
+the `demo` user's home directory).
 
-- **Repo root on server**: `/home/noviustec/`
-- **Backend working dir**: `/home/noviustec/backend/`
-- **Backend env file**: `/home/noviustec/backend/.env` (loaded by systemd via `EnvironmentFile=`)
-- **Ledger location**: `/home/noviustec/backend/companies/default/ledger.xlsx` (not in git)
-- **Inbound log**: `/home/noviustec/backend/inbound-log/` (not in git)
+- **Repo root on server**: `/home/demo/`
+- **Backend working dir**: `/home/demo/backend/`
+- **Backend env file**: `/home/demo/backend/.env` (loaded by systemd via `EnvironmentFile=`)
+- **Backend port**: `3001` (set `PORT=3001` in `.env`; prod's `noviustec-api` owns `:3000` on this shared box)
+- **Ledger location**: `/home/demo/backend/companies/default/ledger.xlsx` (not in git)
+- **Inbound log**: `/home/demo/backend/inbound-log/` (not in git)
 - **systemd service**: `noviustec-demo-api`
-- **SSH user**: `noviustec@api-demo.noviustec.com`
+- **SSH user**: `demo@api-demo.noviustec.com`
 
 ### Useful commands
 
@@ -202,24 +208,24 @@ cd backend && node server.js
 cd backend && node --watch server.js
 
 # Deploy: pull on server, install if package.json changed, restart
-ssh noviustec@api-demo.noviustec.com '
-  cd /home/noviustec &&
+ssh demo@api-demo.noviustec.com '
+  cd /home/demo &&
   git pull &&
   cd backend && npm install &&
   sudo systemctl restart noviustec-demo-api
 '
 
 # SSH to server
-ssh noviustec@api-demo.noviustec.com
+ssh demo@api-demo.noviustec.com
 
 # Tail server logs
-ssh noviustec@api-demo.noviustec.com 'sudo journalctl -u noviustec-demo-api -f'
+ssh demo@api-demo.noviustec.com 'sudo journalctl -u noviustec-demo-api -f'
 
 # Restart backend service
-ssh noviustec@api-demo.noviustec.com 'sudo systemctl restart noviustec-demo-api'
+ssh demo@api-demo.noviustec.com 'sudo systemctl restart noviustec-demo-api'
 
 # Inspect the demo ledger (read-only)
-ssh noviustec@api-demo.noviustec.com 'cd /home/noviustec/backend && npm run inspect-ledger'
+ssh demo@api-demo.noviustec.com 'cd /home/demo/backend && npm run inspect-ledger'
 ```
 
 ## Files of note
