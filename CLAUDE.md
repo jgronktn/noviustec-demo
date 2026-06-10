@@ -196,7 +196,12 @@ the `demo` user's home directory).
 - **Ledger location**: `/home/demo/backend/companies/default/ledger.xlsx` (not in git)
 - **Inbound log**: `/home/demo/backend/inbound-log/` (not in git)
 - **systemd service**: `noviustec-demo-api`
-- **SSH user**: `demo@api-demo.noviustec.com`
+- **SSH access** (two accounts on the same box, both via `~/.ssh/config` aliases):
+  - `ssh demo-box` → the `demo` user: owns the repo/files, runs git pull, npm,
+    builds. **No sudo.**
+  - `ssh noviustec-box` → the prod `noviustec` user: has sudo, used for
+    `systemctl`, nginx, and reading prod's `.env`. Both resolve to
+    `api-demo.noviustec.com` (= the prod box).
 
 ### Useful commands
 
@@ -207,26 +212,35 @@ cd backend && node server.js
 # Run backend in watch mode
 cd backend && node --watch server.js
 
-# Deploy: pull on server, install if package.json changed, restart
-ssh demo@api-demo.noviustec.com '
+# Deploy (two accounts — demo pulls/builds, noviustec restarts):
+#   1) as demo: pull latest, install deps, rebuild the frontend bundle
+ssh demo-box '
   cd /home/demo &&
   git pull &&
-  cd backend && npm install &&
-  sudo systemctl restart noviustec-demo-api
+  cd backend  && npm install &&
+  cd ../frontend && npm install && npm run build
 '
+#   2) as noviustec (has sudo): restart the backend service
+ssh noviustec-box 'sudo systemctl restart noviustec-demo-api'
 
-# SSH to server
-ssh demo@api-demo.noviustec.com
+# SSH in
+ssh demo-box            # repo/app work (no sudo)
+ssh noviustec-box       # sudo tasks (systemctl, nginx)
 
-# Tail server logs
-ssh demo@api-demo.noviustec.com 'sudo journalctl -u noviustec-demo-api -f'
+# Tail server logs (system-level service — needs sudo, so the noviustec account)
+ssh noviustec-box 'sudo journalctl -u noviustec-demo-api -f'
 
 # Restart backend service
-ssh demo@api-demo.noviustec.com 'sudo systemctl restart noviustec-demo-api'
+ssh noviustec-box 'sudo systemctl restart noviustec-demo-api'
 
 # Inspect the demo ledger (read-only)
-ssh demo@api-demo.noviustec.com 'cd /home/demo/backend && npm run inspect-ledger'
+ssh demo-box 'cd /home/demo/backend && npm run inspect-ledger'
 ```
+
+> Note: deploys rebuild the **frontend** too (`npm run build` → `dist/`), since
+> nginx serves the static bundle directly. Prod's flow only restarts the
+> backend; the demo adds the build step because the frontend is part of this
+> repo and served from `/home/demo/frontend/dist`.
 
 ## Files of note
 
