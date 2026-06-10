@@ -1,0 +1,30 @@
+{
+  "name": "noviustec-api",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "parse-fixtures": "node scripts/parse-fixtures.js",
+    "init-ledger": "node scripts/init-ledger.js",
+    "inspect-ledger": "node scripts/inspect-ledger.js",
+    "merge-vendor": "node scripts/merge-vendor.js",
+    "ensure-categories": "node scripts/ensure-categories.js",
+    "relink-orphan-transfers": "node scripts/relink-orphan-transfers.js",
+    "link-awaiting-to-txn": "node scripts/link-awaiting-to-txn.js",
+    "repair-schema-shift-2026-05-20": "node scripts/repair-schema-shift-2026-05-20.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
+    "@fastify/cors": "^11.2.0",
+    "exceljs": "^4.4.0",
+    "fastify": "^5.0.0",
+    "html-to-text": "^10.0.0",
+    "mailparser": "^3.9.8",
+    "sharp": "^0.34.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
