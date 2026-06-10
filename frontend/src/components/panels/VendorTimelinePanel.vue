@@ -723,8 +723,16 @@ const monthGroups = computed(() => {
   min-height: 150px;
 }
 
-/* Months with no activity still take their full min-height (so the time
-   axis doesn't compress), but their tag is muted to read as "quiet". */
+/* Months with no activity collapse to just their (muted) tag — a thin
+   separator a few pixels tall — instead of taking the full min-height. */
+.vt-month-empty {
+  min-height: 0;
+}
+
+.vt-month-empty .vt-tick {
+  padding: 0.1rem 0;
+}
+
 .vt-month-empty .vt-tick-label {
   opacity: 0.55;
 }
