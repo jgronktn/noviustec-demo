@@ -217,15 +217,16 @@ const monthGroups = computed(() => {
       </span>
     </header>
 
-    <div v-if="data.rows.length === 0" class="vt-empty">
-      No invoices or payments recorded for this vendor.
-    </div>
-
-    <div v-else class="vt-timeline">
+    <div
+      class="vt-timeline"
+      :class="{ 'vt-timeline--empty': data.rows.length === 0 }"
+    >
       <!-- Per-side running totals, pinned above the top month tag.
-           The statement_timeline view suppresses these because the
-           Invoices/Payments framing doesn't apply to card balances
-           and bank statements. -->
+           Always rendered (unless explicitly suppressed) so the quick-add
+           buttons stay reachable even on a brand-new, empty book. The
+           statement_timeline view suppresses these because the
+           Invoices/Payments framing doesn't apply to card balances and
+           bank statements. -->
       <div v-if="!data.summary?.hide_side_totals" class="vt-totals">
         <div class="vt-side vt-left">
           <div class="vt-total vt-total-left">
@@ -271,6 +272,25 @@ const monthGroups = computed(() => {
         </div>
       </div>
 
+      <!-- Empty splash — shown when there are no events yet. Sits BELOW the
+           totals so the "+ Add payment" / "+ Add deposit" buttons stay
+           reachable on a brand-new book. -->
+      <div v-if="data.rows.length === 0" class="vt-empty">
+        <template v-if="data.is_global">
+          <div class="vt-empty-icon">◐</div>
+          <p class="vt-empty-title">Your books are empty</p>
+          <p class="vt-empty-hint">
+            Record your first entry with <strong>+ Add payment</strong> or
+            <strong>+ Add deposit</strong> above, forward a receipt to your
+            inbox address, or just ask the agent for a view.
+          </p>
+        </template>
+        <p v-else class="vt-empty-vendor">
+          No invoices or payments recorded for {{ data.vendor }}.
+        </p>
+      </div>
+
+      <template v-else>
       <section
         v-for="group in monthGroups"
         :key="group.key"
@@ -378,6 +398,7 @@ const monthGroups = computed(() => {
         </div>
         </template>
       </section>
+      </template>
     </div>
 
     <!-- Quick-add payment / deposit modals triggered from the right-
@@ -429,9 +450,45 @@ const monthGroups = computed(() => {
 }
 
 .vt-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.4rem;
   color: var(--text-muted);
   font-size: 0.85rem;
-  padding: 1rem 0;
+  padding: 2.5rem 1rem;
+}
+
+.vt-empty-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  color: var(--border);
+  margin-bottom: 0.25rem;
+}
+
+.vt-empty-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vt-empty-hint {
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+.vt-empty-hint strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vt-empty-vendor {
+  margin: 0;
 }
 
 /* ── Timeline ──────────────────────────────────────────────────────── */
@@ -453,6 +510,12 @@ const monthGroups = computed(() => {
   background: var(--border);
   transform: translateX(-50%);
   z-index: 0;
+}
+
+/* On an empty book there are no cards to thread, so the center line behind
+   the splash just looks like a stray rule — hide it. */
+.vt-timeline--empty::before {
+  display: none;
 }
 
 /* ── Totals strip (pinned above the first month section) ──────────────
