@@ -18,6 +18,9 @@ const BUILD_TIME = __BUILD_TIME__;
 const STORAGE_KEY = "noviustec_token";
 
 const token = ref(localStorage.getItem(STORAGE_KEY) || "");
+// Message shown on the TokenGate when a token is rejected — either at the
+// gate itself or mid-session (a stored token that 401s on a later call).
+const authError = ref("");
 const selectedPendingId = ref(null);
 const inboxKey = ref(0); // bump to force InboxPanel reload after approve/reject
 
@@ -93,11 +96,13 @@ function handleEditCancel() {
 const agentPanels = ref([]); // [{id, kind, title, props}]
 
 function onTokenSet(t) {
+  authError.value = "";
   token.value = t;
   localStorage.setItem(STORAGE_KEY, t);
 }
 
 function logout() {
+  authError.value = "";
   token.value = "";
   localStorage.removeItem(STORAGE_KEY);
   selectedPendingId.value = null;
@@ -192,10 +197,13 @@ async function loadMainTimeline() {
       createdAt: Date.now(),
     });
   } catch (e) {
-    // 401 means stale token — the inbox panel will surface that too.
+    // 401 means the stored token is no longer valid — kick back to the gate
+    // with an explanation instead of a blank dialog.
     if (e.status === 401) {
       localStorage.removeItem(STORAGE_KEY);
       token.value = "";
+      authError.value =
+        "Your saved token was rejected by the server. Please re-enter a valid token.";
     }
     // Otherwise: swallow. The user can still interact normally; they
     // just don't get the auto-home screen this session.
@@ -216,7 +224,7 @@ watch(token, (next, prev) => {
 </script>
 
 <template>
-  <TokenGate v-if="!token" @token-set="onTokenSet" />
+  <TokenGate v-if="!token" :initial-error="authError" @token-set="onTokenSet" />
 
   <div v-else class="app-grid">
     <aside class="sidebar">
