@@ -146,7 +146,14 @@ function confidenceClass(c) {
               <span class="spinner" aria-hidden="true"></span>
               Processing…
             </span>
-            <span class="time">{{ formatTime(e.received_at) }}</span>
+            <span class="proc-actions">
+              <span class="time">{{ formatTime(e.received_at) }}</span>
+              <button
+                class="dismiss"
+                title="Remove this entry (cancels a stuck parse)"
+                @click.stop="dismiss(e)"
+              >✕</button>
+            </span>
           </div>
           <div class="row2">
             <span v-if="e.reason" class="proc-sub">{{ e.reason }}</span>
@@ -318,6 +325,12 @@ h2 {
   gap: 0.4rem;
   font-weight: 500;
   color: var(--text-muted);
+}
+
+.proc-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .time {
