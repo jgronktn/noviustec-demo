@@ -158,42 +158,73 @@ const todayIso = computed(
   () => props.data.summary?.as_of || new Date().toISOString().slice(0, 10),
 );
 
-// Group rows by month so each month becomes a wrapped section. The
-// section gets a CSS `min-height` to enforce at least 150px of vertical
-// distance between consecutive month tags, regardless of how few rows
-// the month contains. Within a section we also slot in the red TODAY
-// marker at the boundary between future and past activity.
-const monthGroups = computed(() => {
-  const groups = [];
-  let current = null;
-  let todayInserted = false;
-
-  const ensureGroup = (month) => {
-    if (!current || current.month !== month) {
-      current = { month, key: `m-${month}`, items: [] };
-      groups.push(current);
+// Every calendar month from `maxMonth` down to `minMonth` (inclusive),
+// newest-first, as "YYYY-MM" strings.
+function monthRangeDesc(minMonth, maxMonth) {
+  let [y, m] = maxMonth.split("-").map(Number);
+  const [minY, minM] = minMonth.split("-").map(Number);
+  const out = [];
+  while (y > minY || (y === minY && m >= minM)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m -= 1;
+    if (m === 0) {
+      m = 12;
+      y -= 1;
     }
-    return current;
-  };
+  }
+  return out;
+}
 
+// Render EVERY month from the newest (today, or a future-dated entry) down to
+// the oldest entry — including months with no activity — so the time axis
+// reads continuously instead of jumping across gaps. Each month is a section
+// with a CSS `min-height`, so empty months keep their vertical span rather
+// than collapsing. The red TODAY marker is slotted into today's month at the
+// boundary between future and past activity.
+const monthGroups = computed(() => {
+  const today = todayIso.value; // "YYYY-MM-DD"
+  const todayMonth = today.slice(0, 7);
+
+  // Bucket rows by month. props.data.rows is already newest-first.
+  const byMonth = new Map();
   for (const row of props.data.rows) {
     const month = (row.date || "").slice(0, 7);
     if (!month) continue;
-    const group = ensureGroup(month);
-    if (!todayInserted && row.date <= todayIso.value) {
-      group.items.push({ type: "today", date: todayIso.value, key: "today" });
-      todayInserted = true;
-    }
-    group.items.push({ type: "row", row, key: `row-${row.date}` });
+    if (!byMonth.has(month)) byMonth.set(month, []);
+    byMonth.get(month).push(row);
   }
 
-  // All rows are future-dated → drop the TODAY marker at the bottom of
-  // the last (oldest = earliest in the future) group.
-  if (!todayInserted && groups.length > 0) {
-    groups[groups.length - 1].items.push({
-      type: "today",
-      date: todayIso.value,
-      key: "today",
+  // Full inclusive span: newest (today or a future entry) → oldest entry.
+  const allMonths = [...byMonth.keys(), todayMonth];
+  const maxMonth = allMonths.reduce((a, b) => (a > b ? a : b));
+  const minMonth = allMonths.reduce((a, b) => (a < b ? a : b));
+
+  const groups = [];
+  for (const month of monthRangeDesc(minMonth, maxMonth)) {
+    const monthRows = byMonth.get(month) || [];
+    const items = [];
+    if (month === todayMonth) {
+      // Slot TODAY above the first row dated on/before today (newest-first),
+      // i.e. at the future↔past boundary. Empty today-month → TODAY alone.
+      let inserted = false;
+      monthRows.forEach((row, i) => {
+        if (!inserted && row.date <= today) {
+          items.push({ type: "today", date: today, key: "today" });
+          inserted = true;
+        }
+        items.push({ type: "row", row, key: `row-${month}-${i}` });
+      });
+      if (!inserted) items.push({ type: "today", date: today, key: "today" });
+    } else {
+      monthRows.forEach((row, i) =>
+        items.push({ type: "row", row, key: `row-${month}-${i}` }),
+      );
+    }
+    groups.push({
+      month,
+      key: `m-${month}`,
+      items,
+      empty: monthRows.length === 0,
     });
   }
   return groups;
@@ -295,6 +326,7 @@ const monthGroups = computed(() => {
         v-for="group in monthGroups"
         :key="group.key"
         class="vt-month"
+        :class="{ 'vt-month-empty': group.empty }"
       >
         <!-- Month label sits at the top of its section -->
         <div class="vt-tick">
@@ -689,6 +721,12 @@ const monthGroups = computed(() => {
   display: flex;
   flex-direction: column;
   min-height: 150px;
+}
+
+/* Months with no activity still take their full min-height (so the time
+   axis doesn't compress), but their tag is muted to read as "quiet". */
+.vt-month-empty .vt-tick-label {
+  opacity: 0.55;
 }
 
 /* ── Month tick ────────────────────────────────────────────────────── */
