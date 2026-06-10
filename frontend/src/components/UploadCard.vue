@@ -319,7 +319,7 @@ function formatSize(bytes) {
   flex-direction: column;
   align-items: center;
   gap: 0.15rem;
-  margin: 0.5rem 0 0;
+  margin: 0.5rem 0 0.85rem;
   font-size: 13px;
   color: var(--text-muted);
 }
