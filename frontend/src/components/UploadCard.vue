@@ -159,6 +159,17 @@ function formatSize(bytes) {
         <p class="primary">
           {{ isStatement ? "Drop a bank/card statement PDF here or click to pick" : "Drop a receipt here or click to pick" }}
         </p>
+        <div v-if="!isStatement" class="or-email">
+          <span class="or-sep">– or –</span>
+          <span>
+            email a receipt to
+            <a
+              class="email"
+              href="mailto:receipts@demo.noviustec.com"
+              @click.stop
+            >receipts@demo.noviustec.com</a>
+          </span>
+        </div>
         <p class="hint">PDF or image (JPEG, PNG, WEBP, GIF) up to 20 MB. Large photos are compressed automatically.</p>
       </div>
 
@@ -301,6 +312,26 @@ function formatSize(bytes) {
   margin: 0.25rem 0 0;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.or-email {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.5rem 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.or-email .or-sep {
+  letter-spacing: 0.05em;
+}
+
+.or-email .email {
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: underline;
 }
 
 .selected .filename {
