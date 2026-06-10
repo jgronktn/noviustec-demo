@@ -14,6 +14,7 @@ import {
   ensurePaymentSource,
   listPending,
   getPending,
+  deletePending,
   updatePendingStatus,
   updatePendingFromParse,
   addTransaction,
@@ -510,6 +511,27 @@ export default async function apiRoutes(fastify, opts) {
     }
 
     return { ...row, proposal, suggested_action, match_candidates };
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DELETE /api/pending/:id — remove a pending entry from the inbox (used to
+  // dismiss a failed/processing row). Approved entries are protected: they're
+  // already booked to the GL, so deleting the inbox record would orphan that
+  // history — reject with 409.
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.delete("/api/pending/:id", async (req, reply) => {
+    const { id } = req.params;
+    const row = await getPending(id);
+    if (!row) {
+      return reply.code(404).send({ error: "Pending entry not found" });
+    }
+    if (row.status === "approved") {
+      return reply.code(409).send({
+        error: "Cannot remove an approved entry — it's already booked to the ledger.",
+      });
+    }
+    await deletePending(id);
+    return { ok: true, id, deleted: true };
   });
 
   // ─────────────────────────────────────────────────────────────────────────

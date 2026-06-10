@@ -46,6 +46,10 @@ export const rejectPending = (token, id, body) =>
 export const reparsePending = (token, id) =>
   request(token, "POST", `/api/pending/${encodeURIComponent(id)}/reparse`);
 
+/** Remove a pending entry from the inbox (e.g. dismiss a failed parse). */
+export const deletePending = (token, id) =>
+  request(token, "DELETE", `/api/pending/${encodeURIComponent(id)}`);
+
 export const getCategories = (token) =>
   request(token, "GET", "/api/categories");
 

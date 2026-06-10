@@ -109,6 +109,27 @@ export async function getPending(id) {
 }
 
 /**
+ * Hard-delete a pending row by id (used to dismiss a failed/processing entry
+ * from the inbox). Removes only the PendingInbox row; the raw payload in
+ * inbound-log is left untouched.
+ */
+export async function deletePending(id) {
+  return withWorkbookWrite(async (wb) => {
+    const sheet = wb.getWorksheet(SHEETS.PENDING);
+    let targetRowNumber = null;
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (row.getCell("id").value === id) targetRowNumber = rowNumber;
+    });
+    if (targetRowNumber === null) {
+      throw new Error(`Pending row not found: ${id}`);
+    }
+    sheet.spliceRows(targetRowNumber, 1);
+    return { id, deleted: true };
+  });
+}
+
+/**
  * Update a pending row's status. Used by the approval flow:
  *   - approve → moves to GL via transactions.addTransaction() AND marks here as approved
  *   - reject → marks here as rejected, no GL row created

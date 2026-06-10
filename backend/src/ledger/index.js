@@ -9,6 +9,7 @@ export {
   addProcessingPlaceholder,
   listPending,
   getPending,
+  deletePending,
   updatePendingStatus,
   updatePendingFromParse,
   markPendingFailed,

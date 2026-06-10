@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
-import { listPending } from "../api.js";
+import { listPending, deletePending } from "../api.js";
 import UploadCard from "./UploadCard.vue";
 
 const props = defineProps({
@@ -60,6 +60,17 @@ onBeforeUnmount(stopPolling);
 // reviewable.
 function onRowClick(e) {
   if (e.status === "pending") emit("open", e.id);
+}
+
+// Dismiss a failed entry: delete it server-side, then drop it from the list
+// immediately (the next poll would do the same, but this feels instant).
+async function dismiss(e) {
+  try {
+    await deletePending(props.token, e.id);
+    entries.value = entries.value.filter((x) => x.id !== e.id);
+  } catch (err) {
+    error.value = `Couldn't remove entry: ${err.message}`;
+  }
 }
 
 function formatDate(iso) {
@@ -149,7 +160,13 @@ function confidenceClass(c) {
               <span v-if="e.status === 'failed'" class="fail-tag">Couldn’t parse</span>
               <template v-else>{{ e.vendor || "(no vendor)" }}</template>
             </span>
-            <span class="total">{{ formatTotal(e.total, e.currency) }}</span>
+            <button
+              v-if="e.status === 'failed'"
+              class="dismiss"
+              title="Remove this entry"
+              @click.stop="dismiss(e)"
+            >✕</button>
+            <span v-else class="total">{{ formatTotal(e.total, e.currency) }}</span>
           </div>
           <div class="row2">
             <span class="date">{{ formatDate(e.date) }}</span>
@@ -343,6 +360,23 @@ h2 {
   color: var(--danger);
   font-weight: 600;
   font-size: 0.82rem;
+}
+
+.dismiss {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  background: #fef2f2;
+  color: var(--danger);
 }
 
 .row1 {
