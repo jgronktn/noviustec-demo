@@ -129,6 +129,34 @@ export async function initLedger() {
 }
 
 /**
+ * Factory-reset: wipe the workbook and every archived document/statement,
+ * then recreate a fresh, seeded ledger. DESTRUCTIVE and irreversible.
+ *
+ * Serialized through the same write queue so it can't race with an in-flight
+ * mutation. Only the workbook file and the company's `documents/` and
+ * `statements/` archive subdirs are removed — never the parent directory
+ * itself — so an unexpected LEDGER_PATH can't escalate into a wider delete.
+ * The inbound-log lives outside the company root and is cleared by the caller.
+ */
+export async function resetLedger() {
+  return enqueue(async () => {
+    const companyRoot = path.dirname(LEDGER_PATH);
+    await fs.rm(LEDGER_PATH, { force: true });
+    await fs.rm(path.join(companyRoot, "documents"), {
+      recursive: true,
+      force: true,
+    });
+    await fs.rm(path.join(companyRoot, "statements"), {
+      recursive: true,
+      force: true,
+    });
+    // Recreate the workbook empty + seeded (loadOrCreate mkdir's as needed).
+    const { created } = await loadOrCreate();
+    return { ok: true, recreated: created, path: LEDGER_PATH };
+  });
+}
+
+/**
  * Read every row of a sheet as an object keyed by column.key.
  * Skips the header row.
  */

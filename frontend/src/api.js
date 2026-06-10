@@ -225,6 +225,14 @@ export const recordTransferPayment = (token, awaitingId, body) =>
     body,
   );
 
+/**
+ * DESTRUCTIVE: wipe all data (transactions, pending, awaiting, documents,
+ * statements, inbound emails) and reset the system to an empty state.
+ * Demo-only — the server gates this behind ENABLE_DEMO_RESET.
+ */
+export const resetSystem = (token) =>
+  request(token, "POST", "/api/admin/reset");
+
 /** Quick health check, no auth. */
 export async function healthCheck() {
   const res = await fetch(`${BASE_URL}/health`);

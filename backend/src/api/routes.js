@@ -22,6 +22,7 @@ import {
   listTransactions,
   updateAwaiting,
   getLedgerPath,
+  resetLedger,
   getDocument,
   getKnownVendors,
   addStatement,
@@ -318,6 +319,49 @@ export default async function apiRoutes(fastify, opts) {
       reply.code(401).send({ error: "Unauthorized" });
       return reply;
     }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/admin/reset — DESTRUCTIVE factory reset (demo only).
+  // Wipes the ledger (transactions, pending, awaiting, statements, document
+  // metadata), every archived document/statement file, AND the inbound-log,
+  // then recreates an empty, seeded ledger. Gated behind ENABLE_DEMO_RESET so
+  // it can never fire on a deployment that hasn't explicitly opted in.
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.post("/api/admin/reset", async (req, reply) => {
+    if (process.env.ENABLE_DEMO_RESET !== "1") {
+      return reply.code(403).send({
+        error:
+          "Reset is disabled on this server. Set ENABLE_DEMO_RESET=1 in the backend .env to enable it.",
+      });
+    }
+
+    // Wipe + recreate the ledger and its archived document/statement files.
+    const result = await resetLedger();
+
+    // Clear the inbound-log dir (saved Postmark payloads + parsed sidecars),
+    // leaving the directory itself in place.
+    let logsCleared = 0;
+    try {
+      const files = await fs.readdir(logDir);
+      await Promise.all(
+        files.map((f) =>
+          fs
+            .rm(path.join(logDir, f), { recursive: true, force: true })
+            .then(() => {
+              logsCleared += 1;
+            }),
+        ),
+      );
+    } catch (err) {
+      req.log.error({ err }, "reset: failed clearing inbound-log");
+    }
+
+    req.log.warn(
+      { logs_cleared: logsCleared, recreated: result.recreated },
+      "DEMO FACTORY RESET performed — all data wiped",
+    );
+    return { ok: true, logs_cleared: logsCleared };
   });
 
   // ─────────────────────────────────────────────────────────────────────────

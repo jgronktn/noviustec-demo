@@ -7,7 +7,7 @@ import DashboardPanel from "./components/DashboardPanel.vue";
 import RecordPaymentDialog from "./components/RecordPaymentDialog.vue";
 import EditTransactionDialog from "./components/EditTransactionDialog.vue";
 import EditAwaitingDialog from "./components/EditAwaitingDialog.vue";
-import { fetchMainTimeline, fetchVendorTimeline } from "./api.js";
+import { fetchMainTimeline, fetchVendorTimeline, resetSystem } from "./api.js";
 
 // Injected by vite.config.js at build time. Hover the badge to see when
 // the bundle was built; the value is the short git SHA (with a "+" suffix
@@ -21,6 +21,7 @@ const token = ref(localStorage.getItem(STORAGE_KEY) || "");
 // Message shown on the TokenGate when a token is rejected — either at the
 // gate itself or mid-session (a stored token that 401s on a later call).
 const authError = ref("");
+const clearing = ref(false); // true while a "Clear all" factory reset runs
 const selectedPendingId = ref(null);
 const inboxKey = ref(0); // bump to force InboxPanel reload after approve/reject
 
@@ -107,6 +108,27 @@ function logout() {
   localStorage.removeItem(STORAGE_KEY);
   selectedPendingId.value = null;
   agentPanels.value = [];
+}
+
+// Factory reset: wipe ALL data on the server, then hard-reload so every panel
+// refetches against the now-empty system. Destructive and irreversible —
+// guarded by an explicit confirm. Stays signed in (reload keeps the token).
+async function clearAll() {
+  const ok = window.confirm(
+    "Wipe ALL data?\n\n" +
+      "This permanently deletes every transaction, pending receipt, awaiting " +
+      "invoice, statement, archived document, and inbound email, then resets " +
+      "to an empty system.\n\nThis cannot be undone.",
+  );
+  if (!ok) return;
+  clearing.value = true;
+  try {
+    await resetSystem(token.value);
+    window.location.reload();
+  } catch (e) {
+    clearing.value = false;
+    window.alert(`Reset failed: ${e.message}`);
+  }
 }
 
 function openPending(id) {
@@ -249,6 +271,12 @@ watch(token, (next, prev) => {
           <span class="env" :title="`Built ${BUILD_TIME}`">{{ BUILD_SHA }}</span>
         </div>
         <div class="actions">
+          <button
+            @click="clearAll"
+            class="ghost danger"
+            :disabled="clearing"
+            title="Wipe all data and reset to an empty system"
+          >{{ clearing ? "Clearing…" : "Clear All" }}</button>
           <button @click="logout" class="ghost">Sign out</button>
         </div>
       </header>
@@ -371,6 +399,12 @@ watch(token, (next, prev) => {
   font-family: var(--font-mono);
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .actions button.ghost {
   background: transparent;
   border-color: transparent;
@@ -380,6 +414,18 @@ watch(token, (next, prev) => {
 .actions button.ghost:hover {
   background: #f5f5f0;
   color: var(--text);
+}
+
+/* Clear All — ghost layout but danger-tinted to flag it as destructive.
+   Placed after the .ghost rules so it wins on equal specificity. */
+.actions button.danger {
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.actions button.danger:hover:not(:disabled) {
+  background: #fef2f2;
+  color: var(--danger);
 }
 
 .dashboard {
