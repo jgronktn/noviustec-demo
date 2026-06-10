@@ -137,9 +137,10 @@ function onKeydown(e) {
       <p>Natural-language interface to your books.</p>
       <p class="examples">Try:</p>
       <ul>
-        <li>"What's pending review?"</li>
-        <li>"Show spend by category this month"</li>
-        <li>"What's outstanding from RNZ Electric?"</li>
+        <li>"Show a vendor activity"</li>
+        <li>"Show spend by category"</li>
+        <li>"Show spend by month"</li>
+        <li>"Show outstanding invoices"</li>
       </ul>
     </div>
 
