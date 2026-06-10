@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { listPending } from "../api.js";
 import UploadCard from "./UploadCard.vue";
 
@@ -9,30 +9,70 @@ const props = defineProps({
 });
 const emit = defineEmits(["open"]);
 
-const status = ref("pending");
+// "active" = the live inbox: processing (parse running) + pending (ready to
+// review) + failed. approved/rejected/all are still selectable below.
+const status = ref("active");
 const entries = ref([]);
 const loading = ref(true);
 const error = ref(null);
 
-async function load() {
-  loading.value = true;
+// Poll so a just-arrived email — and its processing→pending transition once
+// parsing finishes — shows up without a manual refresh. `silent` skips the
+// spinner so the background polls don't make the ↻ flicker.
+const POLL_MS = 4000;
+let pollTimer = null;
+
+async function load({ silent = false } = {}) {
+  if (!silent) loading.value = true;
   error.value = null;
   try {
     const data = await listPending(props.token, status.value);
     entries.value = data.entries;
   } catch (e) {
     error.value = e.status === 401 ? "Token rejected (401)" : e.message;
-    if (e.status === 401) localStorage.removeItem("noviustec_token");
+    if (e.status === 401) {
+      localStorage.removeItem("noviustec_token");
+      stopPolling(); // don't keep hammering the API with a rejected token
+    }
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(load);
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(() => load({ silent: true }), POLL_MS);
+}
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+onMounted(() => {
+  load();
+  startPolling();
+});
+onBeforeUnmount(stopPolling);
+
+// Only fully-parsed rows open the review panel — processing/failed aren't
+// reviewable.
+function onRowClick(e) {
+  if (e.status === "pending") emit("open", e.id);
+}
 
 function formatDate(iso) {
   if (!iso) return "";
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatTotal(amount, currency) {
@@ -53,57 +93,80 @@ function confidenceClass(c) {
     <header class="head">
       <h2>Inbox</h2>
       <div class="controls">
-        <select v-model="status" @change="load">
-          <option value="pending">Pending</option>
+        <select v-model="status" @change="load()">
+          <option value="active">Inbox</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
           <option value="all">All</option>
         </select>
-        <button @click="load" :disabled="loading" class="refresh">
+        <button @click="load()" :disabled="loading" class="refresh">
           {{ loading ? "…" : "↻" }}
         </button>
       </div>
     </header>
 
     <div class="upload-wrap">
-      <UploadCard :token="token" @uploaded="load" />
+      <UploadCard :token="token" @uploaded="load()" />
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="!loading && entries.length === 0 && !error" class="empty">
-      No {{ status }} entries.
+      {{ status === "active" ? "Inbox is empty." : `No ${status} entries.` }}
     </div>
 
     <ul v-if="entries.length > 0" class="entries">
       <li
         v-for="e in entries"
         :key="e.id"
-        @click="emit('open', e.id)"
+        @click="onRowClick(e)"
         :class="{
-          resolved: e.status !== 'pending',
+          resolved: e.status === 'approved' || e.status === 'rejected',
+          processing: e.status === 'processing',
+          failed: e.status === 'failed',
           selected: e.id === selectedId,
+          clickable: e.status === 'pending',
         }"
       >
-        <div class="row1">
-          <span class="vendor">{{ e.vendor || "(no vendor)" }}</span>
-          <span class="total">{{ formatTotal(e.total, e.currency) }}</span>
-        </div>
-        <div class="row2">
-          <span class="date">{{ formatDate(e.date) }}</span>
-          <span class="cat" v-if="e.suggested_category">·</span>
-          <span class="cat" v-if="e.suggested_category">
-            {{ e.suggested_category }}
-          </span>
-          <span
-            v-if="e.confidence != null"
-            class="conf"
-            :class="confidenceClass(e.confidence)"
-          >
-            {{ Math.round(e.confidence * 100) }}%
-          </span>
-          <span v-if="e.reason" class="reason">{{ e.reason }}</span>
-        </div>
+        <!-- Processing placeholder: email received, parse still running -->
+        <template v-if="e.status === 'processing'">
+          <div class="row1">
+            <span class="vendor proc">
+              <span class="spinner" aria-hidden="true"></span>
+              Processing…
+            </span>
+            <span class="time">{{ formatTime(e.received_at) }}</span>
+          </div>
+          <div class="row2">
+            <span v-if="e.reason" class="proc-sub">{{ e.reason }}</span>
+          </div>
+        </template>
+
+        <!-- Parsed / failed / resolved -->
+        <template v-else>
+          <div class="row1">
+            <span class="vendor">
+              <span v-if="e.status === 'failed'" class="fail-tag">Couldn’t parse</span>
+              <template v-else>{{ e.vendor || "(no vendor)" }}</template>
+            </span>
+            <span class="total">{{ formatTotal(e.total, e.currency) }}</span>
+          </div>
+          <div class="row2">
+            <span class="date">{{ formatDate(e.date) }}</span>
+            <span class="cat" v-if="e.suggested_category">·</span>
+            <span class="cat" v-if="e.suggested_category">
+              {{ e.suggested_category }}
+            </span>
+            <span
+              v-if="e.confidence != null"
+              class="conf"
+              :class="confidenceClass(e.confidence)"
+            >
+              {{ Math.round(e.confidence * 100) }}%
+            </span>
+            <span v-if="e.reason" class="reason">{{ e.reason }}</span>
+          </div>
+        </template>
       </li>
     </ul>
   </section>
@@ -202,13 +265,17 @@ h2 {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.5rem 0.6rem;
-  cursor: pointer;
+  cursor: default;
   transition:
     background 0.1s ease,
     border-color 0.1s ease;
 }
 
-.entries li:hover {
+.entries li.clickable {
+  cursor: pointer;
+}
+
+.entries li.clickable:hover {
   background: #f5f5f0;
   border-color: #d0d0c8;
 }
@@ -221,6 +288,61 @@ h2 {
 
 .entries li.resolved {
   opacity: 0.55;
+}
+
+/* Processing placeholder — email received, parse in flight. */
+.entries li.processing {
+  background: #fafaf5;
+}
+
+.vendor.proc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.proc-sub {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text-muted);
+  border-radius: 50%;
+  display: inline-block;
+  animation: inbox-spin 0.7s linear infinite;
+}
+
+@keyframes inbox-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Failed — parse gave up (not a receipt / error). */
+.entries li.failed {
+  opacity: 0.75;
+}
+
+.fail-tag {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.82rem;
 }
 
 .row1 {

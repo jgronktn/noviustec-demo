@@ -450,7 +450,15 @@ export default async function apiRoutes(fastify, opts) {
           properties: {
             status: {
               type: "string",
-              enum: ["pending", "approved", "rejected", "all"],
+              enum: [
+                "active",
+                "processing",
+                "pending",
+                "failed",
+                "approved",
+                "rejected",
+                "all",
+              ],
               default: "pending",
             },
           },

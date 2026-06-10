@@ -6,10 +6,12 @@ export { getCategories, addCategory } from "./categories.js";
 export { getPaymentSources, ensurePaymentSource } from "./sources.js";
 export {
   addPending,
+  addProcessingPlaceholder,
   listPending,
   getPending,
   updatePendingStatus,
   updatePendingFromParse,
+  markPendingFailed,
 } from "./pending.js";
 export {
   addTransaction,

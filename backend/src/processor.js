@@ -22,6 +22,8 @@ import {
   getPaymentSources,
   getKnownVendors,
   addPending,
+  updatePendingFromParse,
+  markPendingFailed,
 } from "./ledger/index.js";
 import { sendParseReply } from "./notifications/email.js";
 
@@ -42,7 +44,13 @@ const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 export { SUPPORTED_UPLOAD_TYPES, MAX_UPLOAD_BYTES };
 
-export async function processReceiptPayload({ payload, logger, logDir, sourceFilename }) {
+// `pendingId`, when supplied (the webhook path), is the id of a "processing"
+// placeholder row created the moment the email arrived. We resolve THAT row
+// instead of inserting a new one — to "pending" with the parsed data, or to
+// "failed" if the email isn't a trackable receipt / the parse throws. The
+// upload path passes no pendingId and keeps the original behavior (insert a
+// row only on success; surface other outcomes via the returned result).
+export async function processReceiptPayload({ payload, logger, logDir, sourceFilename, pendingId = null }) {
   const parsedFilename = sourceFilename.replace(/\.json$/, "-parsed.json");
   const parsedPath = path.join(logDir, parsedFilename);
 
@@ -60,20 +68,34 @@ export async function processReceiptPayload({ payload, logger, logDir, sourceFil
     });
     await fs.writeFile(parsedPath, JSON.stringify(result, null, 2));
 
-    let pendingId = null;
+    let resolvedPendingId = pendingId;
     if (result.status === "parsed" || result.status === "needs_attention") {
       try {
-        const { id } = await addPending({ source_file: sourceFilename, result });
-        pendingId = id;
+        if (pendingId) {
+          // Promote the processing placeholder to a ready-for-review row.
+          await updatePendingFromParse(pendingId, result, { status: "pending" });
+        } else {
+          const { id } = await addPending({ source_file: sourceFilename, result });
+          resolvedPendingId = id;
+        }
       } catch (err) {
-        logger.error({ err, file: sourceFilename }, "failed to add pending row");
+        logger.error({ err, file: sourceFilename }, "failed to write pending row");
+      }
+    } else if (pendingId) {
+      // Terminal non-receipt outcome (cloud link, not a receipt, unsupported
+      // type, …). Resolve the placeholder to "failed" so it doesn't hang in
+      // "processing"; the sender still gets the "needs action" reply below.
+      try {
+        await markPendingFailed(pendingId, result.reason ?? result.status ?? "could_not_parse");
+      } catch (err) {
+        logger.error({ err, file: sourceFilename }, "failed to mark pending failed");
       }
     }
 
     logger.info(
       {
         file: sourceFilename,
-        pending_id: pendingId,
+        pending_id: resolvedPendingId,
         status: result.status,
         reason: result.reason,
         vendor: result.proposal?.vendor?.name ?? null,
@@ -92,8 +114,12 @@ export async function processReceiptPayload({ payload, logger, logDir, sourceFil
       logger.error({ err: err.message }, "sendParseReply unexpected throw"),
     );
 
-    return { result, pending_id: pendingId, source_file: sourceFilename };
+    return { result, pending_id: resolvedPendingId, source_file: sourceFilename };
   } catch (err) {
+    // Don't leave a placeholder stuck in "processing" when the parse throws.
+    if (pendingId) {
+      await markPendingFailed(pendingId, "parser_exception").catch(() => {});
+    }
     const errorRecord = {
       status: "error",
       reason: "parser_exception",

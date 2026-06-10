@@ -12,6 +12,7 @@ if (existsSync(ENV_PATH)) {
 }
 
 const { processReceiptPayload } = await import("./src/processor.js");
+const { addProcessingPlaceholder } = await import("./src/ledger/index.js");
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const HOST = process.env.HOST ?? "127.0.0.1";  // loopback only — nginx fronts it
@@ -102,6 +103,21 @@ app.post("/webhooks/postmark-inbound", async (req, reply) => {
     bodyBytes: JSON.stringify(body).length,
   }, "inbound email received");
 
+  // Drop a "processing" placeholder into the inbox right away so the UI shows
+  // the email is being worked on, before the multi-second vision parse runs.
+  // processReceiptPayload() resolves this same row to pending/failed. A quick
+  // local workbook write — fine to await before the 200.
+  let pendingId = null;
+  try {
+    const { id } = await addProcessingPlaceholder({
+      source_file: filename,
+      subject: body?.Subject ?? null,
+    });
+    pendingId = id;
+  } catch (err) {
+    req.log.error({ err }, "failed to add processing placeholder");
+  }
+
   // Kick off parsing in the background. Don't await — Claude vision calls take
   // seconds and we must return 200 fast (Postmark retries non-200 responses).
   // Errors are logged and persisted to disk inside processReceiptPayload;
@@ -111,9 +127,10 @@ app.post("/webhooks/postmark-inbound", async (req, reply) => {
     logger: req.log,
     logDir: LOG_DIR,
     sourceFilename: filename,
+    pendingId,
   }).catch(() => {});
 
-  return reply.code(200).send({ ok: true, stored: filename });
+  return reply.code(200).send({ ok: true, stored: filename, pending_id: pendingId });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
