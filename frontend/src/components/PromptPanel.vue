@@ -142,6 +142,7 @@ function onKeydown(e) {
         <li>"Show spend by month"</li>
         <li>"Show outstanding invoices"</li>
         <li>"Show (pick a month) activity"</li>
+        <li>"Manage categories"</li>
       </ul>
     </div>
 
