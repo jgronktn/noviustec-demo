@@ -1911,6 +1911,41 @@ export default async function apiRoutes(fastify, opts) {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  // GET /api/category-timeline?category=X — single-category timeline payload
+  // (all booked payments + deposits in that category across vendors).
+  // Shape-compatible with show_category_timeline; used by the frontend to
+  // refetch a category timeline panel after a ledger mutation.
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.get(
+    "/api/category-timeline",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["category"],
+          properties: {
+            category: { type: "string", minLength: 1 },
+            from: { type: "string" },
+            to: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const props = await buildTimelineProps({
+        category: req.query.category,
+        from: req.query.from,
+        to: req.query.to,
+      });
+      return {
+        kind: "vendor_timeline",
+        title: `Category · ${props.category || req.query.category}`,
+        props,
+      };
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   // POST /api/upload-statement — direct upload of a bank or credit-card
   // statement PDF. Runs the statement parser, archives the PDF under
   // companies/{id}/statements/{source-slug}/{close-date}.pdf, and writes a

@@ -7,7 +7,12 @@ import DashboardPanel from "./components/DashboardPanel.vue";
 import RecordPaymentDialog from "./components/RecordPaymentDialog.vue";
 import EditTransactionDialog from "./components/EditTransactionDialog.vue";
 import EditAwaitingDialog from "./components/EditAwaitingDialog.vue";
-import { fetchMainTimeline, fetchVendorTimeline, resetSystem } from "./api.js";
+import {
+  fetchMainTimeline,
+  fetchVendorTimeline,
+  fetchCategoryTimeline,
+  resetSystem,
+} from "./api.js";
 
 // Injected by vite.config.js at build time. Hover the badge to see when
 // the bundle was built; the value is the short git SHA (with a "+" suffix
@@ -176,12 +181,24 @@ async function refreshTimelinePanels() {
     agentPanels.value.map(async (p) => {
       if (p.kind !== "vendor_timeline") return p;
       try {
-        const vendor = p.props?.query || null;
         const from = p.props?.period?.from || undefined;
         const to = p.props?.period?.to || undefined;
-        const data = vendor
-          ? await fetchVendorTimeline(token.value, { vendor, from, to })
-          : await fetchMainTimeline(token.value);
+        let data;
+        if (p.props?.is_category) {
+          data = await fetchCategoryTimeline(token.value, {
+            category: p.props.category,
+            from,
+            to,
+          });
+        } else if (p.props?.query) {
+          data = await fetchVendorTimeline(token.value, {
+            vendor: p.props.query,
+            from,
+            to,
+          });
+        } else {
+          data = await fetchMainTimeline(token.value);
+        }
         return {
           ...p,
           title: data.title || p.title,

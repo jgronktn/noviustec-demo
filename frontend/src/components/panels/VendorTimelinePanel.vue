@@ -7,6 +7,16 @@ const props = defineProps({
   data: { type: Object, required: true },
 });
 
+// Subtitle event count for the multi-vendor headers. The global view counts
+// invoices + payments; a category view has no invoices but may have deposits,
+// so it counts payments + deposits instead.
+const eventCount = computed(() => {
+  const s = props.data.summary || {};
+  return props.data.is_category
+    ? (s.payment_count || 0) + (s.deposit_count || 0)
+    : (s.invoice_count || 0) + (s.payment_count || 0);
+});
+
 // Provided by App.vue. Optional so the component still renders fine in
 // contexts where the dialogs aren't mounted.
 const openEditDialog = inject("openEditDialog", null);
@@ -237,11 +247,12 @@ const monthGroups = computed(() => {
          canonical name; global mode shows 'All activity' plus a count.
          No summary tiles — the timeline itself is the answer. -->
     <header class="vt-head">
-      <h3 v-if="data.is_global" class="vt-vendor">All activity</h3>
+      <h3 v-if="data.is_category" class="vt-vendor">{{ data.category }}</h3>
+      <h3 v-else-if="data.is_global" class="vt-vendor">All activity</h3>
       <h3 v-else class="vt-vendor">{{ data.vendor }}</h3>
-      <span v-if="data.is_global" class="vt-match">
+      <span v-if="data.is_global || data.is_category" class="vt-match">
         {{ data.summary.distinct_vendors }} vendor<span v-if="data.summary.distinct_vendors !== 1">s</span>
-        · {{ data.summary.invoice_count + data.summary.payment_count }} event<span v-if="data.summary.invoice_count + data.summary.payment_count !== 1">s</span>
+        · {{ eventCount }} event<span v-if="eventCount !== 1">s</span>
       </span>
       <span v-else-if="data.query !== data.vendor" class="vt-match">
         matched “{{ data.query }}”
@@ -367,7 +378,7 @@ const monthGroups = computed(() => {
               @click="handleCardClick(ev)"
             >
               <span class="vt-card-kind">{{ kindLabel(ev) }}</span>
-              <span v-if="data.is_global" class="vt-card-vendor">{{ ev.vendor }}</span>
+              <span v-if="data.is_global || data.is_category" class="vt-card-vendor">{{ ev.vendor }}</span>
               <span v-if="ev.reference_number" class="vt-card-ref">
                 {{ ev.reference_number }}
               </span>
@@ -408,7 +419,7 @@ const monthGroups = computed(() => {
               @click="handleCardClick(ev)"
             >
               <span class="vt-card-kind">{{ kindLabel(ev) }}</span>
-              <span v-if="data.is_global" class="vt-card-vendor">{{ ev.vendor }}</span>
+              <span v-if="data.is_global || data.is_category" class="vt-card-vendor">{{ ev.vendor }}</span>
               <!-- Transfers: show "<from> → <to>"; payments: show payment_source. -->
               <span
                 v-if="ev.kind === 'transfer' && (ev.from_source || ev.to_source)"

@@ -193,7 +193,7 @@ const PAYMENT_METHOD_KINDS = new Set([
  * When `vendor` is null/empty, every vendor's events appear and the panel
  * renders in "global mode" (vendor name shown on each card).
  */
-export async function buildTimelineProps({ vendor = null, from, to } = {}) {
+export async function buildTimelineProps({ vendor = null, category = null, from, to } = {}) {
   const today = new Date().toISOString().slice(0, 10);
 
   const awaitingAll = await listAwaiting({ status: "all" });
@@ -260,12 +260,24 @@ export async function buildTimelineProps({ vendor = null, from, to } = {}) {
     docsByTxn.get(d.txn_id).push(d);
   }
 
-  const matchedAwaiting = vendor
-    ? awaitingAll.filter((r) => vendorMatches(r.vendor, vendor))
-    : awaitingAll;
-  const matchedTxns = vendor
-    ? txnAll.filter((r) => vendorMatches(r.vendor, vendor))
-    : txnAll;
+  // Category view: filter the booked-GL side (only payments + deposits carry
+  // a category) to the requested category across ALL vendors. Invoices have
+  // no category column, so a category timeline excludes the awaiting/left
+  // side — it's a "where did this category's money actually go" view.
+  const catLc = category ? category.trim().toLowerCase() : null;
+  const txnInCategory = (r) =>
+    !catLc || String(r.category || "").toLowerCase() === catLc;
+
+  const matchedAwaiting = category
+    ? []
+    : vendor
+      ? awaitingAll.filter((r) => vendorMatches(r.vendor, vendor))
+      : awaitingAll;
+  const matchedTxns = category
+    ? txnAll.filter(txnInCategory)
+    : vendor
+      ? txnAll.filter((r) => vendorMatches(r.vendor, vendor))
+      : txnAll;
 
   const inRange = (d) => {
     const iso = isoDate(d);
@@ -450,12 +462,15 @@ export async function buildTimelineProps({ vendor = null, from, to } = {}) {
   // view we synthesize one from the destination account so the card has
   // something to label. The frontend renders this in the card-vendor slot.
   const awaitingByIdQuick = new Map(awaitingAll.map((a) => [a.id, a]));
-  const matchedTransfers = transferAll.filter((t) => {
-    if (!vendor) return true;
-    if (!t.awaiting_id) return false;
-    const aw = awaitingByIdQuick.get(t.awaiting_id);
-    return aw && vendorMatches(aw.vendor, vendor);
-  });
+  // Transfers carry no category, so a category timeline omits them entirely.
+  const matchedTransfers = category
+    ? []
+    : transferAll.filter((t) => {
+        if (!vendor) return true;
+        if (!t.awaiting_id) return false;
+        const aw = awaitingByIdQuick.get(t.awaiting_id);
+        return aw && vendorMatches(aw.vendor, vendor);
+      });
 
   for (const t of matchedTransfers) {
     const linkedAwaiting = t.awaiting_id
@@ -486,11 +501,11 @@ export async function buildTimelineProps({ vendor = null, from, to } = {}) {
   }
 
   // ── Bank statements as right-side informational cards ────────────
-  // Only on the global timeline (vendor === null). Statements have no
-  // vendor, so they'd never show up under a vendor filter anyway.
-  // They're informational — never count toward Payments out / Income
+  // Only on the unfiltered global timeline. Statements have no vendor or
+  // category, so they don't belong under a vendor- or category-filtered
+  // view. They're informational — never count toward Payments out / Income
   // totals or payment_count / deposit_count.
-  if (!vendor) {
+  if (!vendor && !category) {
     const allStmts = await listStatements({ status: "all" });
     const sources = await getPaymentSources({ activeOnly: false });
     const last4Of = (s) => {
@@ -648,11 +663,20 @@ export async function buildTimelineProps({ vendor = null, from, to } = {}) {
   const canonicalVendor = vendor
     ? [...vendorCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? vendor
     : null;
+  // Display name for a category view: prefer the canonical stored casing
+  // from a matched row, falling back to the requested string.
+  const canonicalCategory = category
+    ? matchedTxns[0]?.category ?? category
+    : null;
 
   return {
     vendor: canonicalVendor,
     query: vendor || null,
-    is_global: !vendor,
+    // is_global = the truly unfiltered, all-vendor view. A category view is
+    // multi-vendor but scoped, so it's NOT global — it gets its own flag.
+    is_global: !vendor && !category,
+    is_category: !!category,
+    category: canonicalCategory,
     period: { from: from ?? null, to: to ?? null },
     rows,
     summary: {
@@ -1054,6 +1078,27 @@ export async function runTool(name, input) {
         distinct_vendors: props.summary.distinct_vendors,
         outstanding_balance: props.summary.outstanding_balance,
         overdue_count: props.summary.overdue_count,
+      };
+    }
+
+    case "show_category_timeline": {
+      if (!args.category) {
+        throw new Error("show_category_timeline requires 'category'");
+      }
+      const props = await buildTimelineProps({
+        category: args.category,
+        from: args.from,
+        to: args.to,
+      });
+      const title =
+        args.title ?? `Category · ${props.category ?? args.category}`;
+      return {
+        __panel: { kind: "vendor_timeline", title, props },
+        category: props.category,
+        payment_count: props.summary.payment_count,
+        deposit_count: props.summary.deposit_count,
+        distinct_vendors: props.summary.distinct_vendors,
+        total_paid: props.summary.total_paid,
       };
     }
 

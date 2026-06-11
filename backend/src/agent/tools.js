@@ -310,6 +310,34 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "show_category_timeline",
+    description:
+      "Render the activity timeline for a single spend category — every booked payment and deposit in that category, across ALL vendors, in the same two-column timeline format. Each card shows the vendor name since the view spans multiple vendors. Use when the user wants a category's activity over time: 'show Travel activity', 'timeline for Cloud Infrastructure', 'what's the activity in Office Supplies', 'show me everything in Professional Services'. Category match is case-insensitive and exact, so pass a real category name — call get_categories first if you're unsure which exists. Note: unpaid invoices carry no category, so this view shows booked GL activity (payments + deposits) only.",
+    input_schema: {
+      type: "object",
+      required: ["category"],
+      properties: {
+        category: {
+          type: "string",
+          description:
+            "Category name, matched case-insensitively against the chart of categories (e.g. 'Cloud Infrastructure').",
+        },
+        from: {
+          type: "string",
+          description: "Optional inclusive start date (YYYY-MM-DD).",
+        },
+        to: {
+          type: "string",
+          description: "Optional inclusive end date (YYYY-MM-DD).",
+        },
+        title: {
+          type: "string",
+          description: "Optional title.",
+        },
+      },
+    },
+  },
+  {
     name: "show_vendor_timeline",
     description:
       "Render a two-column vertical timeline for a single vendor — invoices on the left, payments on the right, sorted chronologically. Each event is a card anchored by its date, with subtle color coding (gray = paid, amber = awaiting, red = overdue). A running balance + outstanding-invoice list sits at the top. Use this when the user wants to see the financial relationship with one vendor over time: 'show my Anthropic timeline', 'history with Kroger', 'what's our DigitalOcean relationship look like'. Vendor match is case-insensitive substring.",

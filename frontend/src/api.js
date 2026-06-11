@@ -76,6 +76,16 @@ export function fetchVendorTimeline(token, { vendor, from, to } = {}) {
   return request(token, "GET", `/api/vendor-timeline?${params.toString()}`);
 }
 
+/** Single-category timeline (all booked activity in one category across
+ *  vendors). Used by App.vue to refetch a category timeline panel after a
+ *  ledger mutation. */
+export function fetchCategoryTimeline(token, { category, from, to } = {}) {
+  const params = new URLSearchParams({ category });
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return request(token, "GET", `/api/category-timeline?${params.toString()}`);
+}
+
 /** Fetch one GL transaction by id (used by the timeline edit dialog). */
 export const fetchTransaction = (token, id) =>
   request(token, "GET", `/api/transactions/${encodeURIComponent(id)}`);
