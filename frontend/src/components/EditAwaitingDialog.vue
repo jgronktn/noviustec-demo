@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, inject } from "vue";
-import { fetchAwaiting, updateAwaiting } from "../api.js";
+import { fetchAwaiting, updateAwaiting, downloadAwaitingDocument } from "../api.js";
 
 const props = defineProps({
   awaitingId: { type: String, required: true },
@@ -60,6 +60,19 @@ const submitting = ref(false);
 const error = ref(null);
 const form = ref(null);
 const original = ref(null);
+
+const downloading = ref(false);
+async function downloadDoc() {
+  downloading.value = true;
+  error.value = null;
+  try {
+    await downloadAwaitingDocument(token.value, props.awaitingId);
+  } catch (e) {
+    error.value = e.message || "Couldn't download the file.";
+  } finally {
+    downloading.value = false;
+  }
+}
 
 async function load() {
   try {
@@ -165,7 +178,17 @@ function fmtAmount(n, currency = "USD") {
           </h3>
           <p class="ed-sub mono">{{ awaitingId }}</p>
         </div>
-        <button class="ed-close" :disabled="submitting" @click="emit('cancel')" aria-label="Close">×</button>
+        <div class="ed-head-actions">
+          <button
+            v-if="original?.document_path"
+            class="ed-download"
+            type="button"
+            :disabled="downloading"
+            title="Download the attached file"
+            @click="downloadDoc"
+          >⬇ {{ downloading ? "…" : "File" }}</button>
+          <button class="ed-close" :disabled="submitting" @click="emit('cancel')" aria-label="Close">×</button>
+        </div>
       </header>
 
       <p class="ed-hint">
@@ -354,6 +377,35 @@ function fmtAmount(n, currency = "USD") {
 
 .ed-pay-cta:disabled {
   opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ed-head-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.ed-download {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-download:hover:not(:disabled) {
+  background: #f0f0eb;
+  color: var(--text);
+  border-color: #d0d0c8;
+}
+
+.ed-download:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

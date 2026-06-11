@@ -6,6 +6,7 @@ import {
   deleteTransaction,
   getCategories,
   getPaymentSources,
+  downloadTransactionDocument,
 } from "../api.js";
 
 const props = defineProps({
@@ -81,6 +82,19 @@ function toDateInput(v) {
   if (typeof v === "string") return v.slice(0, 10);
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return "";
+}
+
+const downloading = ref(false);
+async function downloadDoc() {
+  downloading.value = true;
+  error.value = null;
+  try {
+    await downloadTransactionDocument(token.value, props.txnId);
+  } catch (e) {
+    error.value = e.message || "Couldn't download the file.";
+  } finally {
+    downloading.value = false;
+  }
 }
 
 function onKeyDown(e) {
@@ -185,7 +199,17 @@ function fmtAmount(n, currency = "USD") {
           </h3>
           <p class="ed-sub mono">{{ txnId }}</p>
         </div>
-        <button class="ed-close" :disabled="submitting" @click="emit('cancel')" aria-label="Close">×</button>
+        <div class="ed-head-actions">
+          <button
+            v-if="original?.document_path"
+            class="ed-download"
+            type="button"
+            :disabled="downloading"
+            title="Download the attached file"
+            @click="downloadDoc"
+          >⬇ {{ downloading ? "…" : "File" }}</button>
+          <button class="ed-close" :disabled="submitting" @click="emit('cancel')" aria-label="Close">×</button>
+        </div>
       </header>
 
       <div v-if="loading" class="ed-loading">Loading…</div>
@@ -361,6 +385,35 @@ function fmtAmount(n, currency = "USD") {
   margin: 0.25rem 0 0;
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.ed-head-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.ed-download {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-download:hover:not(:disabled) {
+  background: #f0f0eb;
+  color: var(--text);
+  border-color: #d0d0c8;
+}
+
+.ed-download:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ed-close {

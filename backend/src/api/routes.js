@@ -1659,6 +1659,32 @@ export default async function apiRoutes(fastify, opts) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // GET /api/documents/awaiting/:id — stream the document archived against an
+  // AwaitingPayment (invoice) row. Mirrors the transaction-document route.
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.get("/api/documents/awaiting/:id", async (req, reply) => {
+    const row = await getAwaiting(req.params.id);
+    if (!row) return reply.code(404).send({ error: "Awaiting row not found" });
+    if (!row.document_path) {
+      return reply.code(404).send({ error: "No document archived for this invoice" });
+    }
+    const absolute = resolveDocumentPath({ companyId: COMPANY_ID, documentPath: row.document_path });
+    if (!absolute) return reply.code(400).send({ error: "Invalid document path" });
+
+    try {
+      const buffer = await fs.readFile(absolute);
+      const ext = path.extname(absolute).slice(1).toLowerCase();
+      const mime = MIME_BY_EXT[ext] || "application/octet-stream";
+      reply
+        .header("Content-Type", mime)
+        .header("Content-Disposition", `inline; filename="${path.basename(absolute)}"`)
+        .send(buffer);
+    } catch {
+      return reply.code(404).send({ error: "Document file missing on disk" });
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // GET /api/documents/by-id/:doc_id — stream an archived document by its
   // Documents-sheet ID. Used by the dashboard file browser, which deals in
   // doc IDs rather than txn IDs (a single txn can have multiple docs).

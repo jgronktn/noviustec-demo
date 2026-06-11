@@ -291,6 +291,23 @@ export async function downloadPendingDocument(token, pendingId) {
   );
 }
 
+/** Download the document archived against a GL transaction (filename from the
+ *  server). Use from the edit-transaction dialog. */
+export async function downloadTransactionDocument(token, txnId) {
+  return downloadFile(
+    token,
+    `/api/documents/transaction/${encodeURIComponent(txnId)}`,
+  );
+}
+
+/** Download the document archived against an awaiting/invoice row. */
+export async function downloadAwaitingDocument(token, awaitingId) {
+  return downloadFile(
+    token,
+    `/api/documents/awaiting/${encodeURIComponent(awaitingId)}`,
+  );
+}
+
 /** Extract `filename="…"` from a Content-Disposition header, or a fallback. */
 function filenameFromResponse(res, fallback = "download") {
   const cd = res.headers.get("Content-Disposition") || "";
