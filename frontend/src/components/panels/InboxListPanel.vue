@@ -1,7 +1,29 @@
 <script setup>
+import { ref, inject } from "vue";
+import { downloadPendingDocument } from "../../api.js";
+
 defineProps({
   data: { type: Object, required: true },
 });
+
+// Provided by App.vue so panels can make authenticated requests.
+const token = inject("apiToken");
+const downloadError = ref("");
+
+// Email/upload entries have a saved source payload with the original file.
+// "other" entries (inline-HTML emails, manual) have nothing to download.
+function hasDocument(e) {
+  return e.source_kind === "email" || e.source_kind === "upload";
+}
+
+async function download(e) {
+  downloadError.value = "";
+  try {
+    await downloadPendingDocument(token.value, e.id);
+  } catch (err) {
+    downloadError.value = `Couldn't download ${e.vendor || "entry"}: ${err.message}`;
+  }
+}
 
 function fmt(amount, currency = "USD") {
   if (amount == null) return "—";
@@ -45,6 +67,8 @@ function sourceIcon(kind) {
       </div>
     </div>
 
+    <p v-if="downloadError" class="dl-error">{{ downloadError }}</p>
+
     <div v-if="data.entries.length === 0" class="empty">
       Nothing here yet.
     </div>
@@ -59,6 +83,7 @@ function sourceIcon(kind) {
             <th class="num">Total</th>
             <th>Reference</th>
             <th>Status</th>
+            <th class="dl-col">File</th>
           </tr>
         </thead>
         <tbody>
@@ -71,6 +96,15 @@ function sourceIcon(kind) {
             <td class="mono ref">{{ e.reference_number || "—" }}</td>
             <td>
               <span class="pill" :class="statusClass(e.status)">{{ e.status }}</span>
+            </td>
+            <td class="dl-col">
+              <button
+                v-if="hasDocument(e)"
+                class="dl-btn"
+                title="Download original file"
+                @click="download(e)"
+              >⬇</button>
+              <span v-else class="muted">—</span>
             </td>
           </tr>
         </tbody>
@@ -183,6 +217,34 @@ tr:hover td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dl-error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.dl-col {
+  text-align: center;
+  width: 44px;
+}
+
+.dl-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dl-btn:hover {
+  background: #f0f0eb;
+  color: var(--text);
+  border-color: #d0d0c8;
 }
 
 .pill {

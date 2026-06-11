@@ -268,6 +268,29 @@ export async function openTransactionDocument(token, txnId) {
 }
 
 /**
+ * Download the original document attached to an inbox entry — works for any
+ * status, including rejected. The filename comes from the server's
+ * Content-Disposition header (we don't know the attachment name client-side).
+ */
+export async function downloadPendingDocument(token, pendingId) {
+  return downloadFile(
+    token,
+    `/api/documents/pending/${encodeURIComponent(pendingId)}`,
+  );
+}
+
+/** Extract `filename="…"` from a Content-Disposition header, or a fallback. */
+function filenameFromResponse(res, fallback = "download") {
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  try {
+    return m ? decodeURIComponent(m[1]) : fallback;
+  } catch {
+    return m ? m[1] : fallback;
+  }
+}
+
+/**
  * Fetch an authenticated download (PDF / image / xlsx) and trigger a
  * Save-As dialog with the provided filename. Works cross-origin because
  * the blob is created from in-memory bytes, sidestepping the same-origin
@@ -289,7 +312,9 @@ export async function downloadFile(token, apiPath, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename || "download";
+  // Prefer the caller's filename; otherwise use the server's (e.g. the
+  // original attachment name for an inbox document download).
+  a.download = filename || filenameFromResponse(res);
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
