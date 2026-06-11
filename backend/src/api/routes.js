@@ -10,6 +10,8 @@ import * as path from "node:path";
 
 import {
   getCategories,
+  addCategory,
+  updateCategory,
   getPaymentSources,
   ensurePaymentSource,
   listPending,
@@ -415,6 +417,76 @@ export default async function apiRoutes(fastify, opts) {
     async (req) => {
       const categories = await getCategories({ activeOnly: !req.query.include_archived });
       return { count: categories.length, categories };
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/categories — add a category. Idempotent on name (409 if it
+  // already exists).
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.post(
+    "/api/categories",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", minLength: 1 },
+            type: { type: "string", enum: ["expense", "revenue", "transfer"] },
+            description: { type: "string" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const { name, type, description } = req.body;
+      const result = await addCategory({
+        name,
+        type: type ?? "expense",
+        description: description ?? "",
+      });
+      if (!result.added) {
+        return reply
+          .code(409)
+          .send({ error: `Category "${result.name}" already exists` });
+      }
+      return { ok: true, ...result };
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PATCH /api/categories/:name — rename, change type/description, or
+  // archive/restore (active). A rename cascades across booked GL rows.
+  // ─────────────────────────────────────────────────────────────────────────
+  fastify.patch(
+    "/api/categories/:name",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+            type: { type: "string", enum: ["expense", "revenue", "transfer"] },
+            description: { type: "string" },
+            active: { type: "boolean" },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const current = decodeURIComponent(req.params.name);
+      try {
+        const result = await updateCategory(current, req.body || {});
+        return { ok: true, ...result };
+      } catch (err) {
+        const code = /not found/i.test(err.message)
+          ? 404
+          : /already exists/i.test(err.message)
+            ? 409
+            : 400;
+        return reply.code(code).send({ error: err.message });
+      }
     },
   );
 

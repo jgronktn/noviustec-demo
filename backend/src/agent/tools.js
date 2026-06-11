@@ -585,6 +585,68 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "show_category_manager",
+    description:
+      "Open the category manager — an editable panel listing the chart of categories where the user can add, rename, change type, and archive/restore categories directly. Use when the user wants to 'manage categories', 'edit my categories', 'see and change the categories', or add/clean up several at once.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Optional title." },
+      },
+    },
+  },
+  {
+    name: "add_category",
+    description:
+      "Add a new category to the chart of categories. Idempotent on name (no-op if it already exists). Use for 'add a category called Travel', 'create a Marketing category'. Default type is 'expense'; use 'revenue' for income categories and 'transfer' for internal money movement.",
+    input_schema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: {
+          type: "string",
+          description: "Category name, e.g. 'Travel & Meals'.",
+        },
+        type: {
+          type: "string",
+          enum: ["expense", "revenue", "transfer"],
+          description: "Category type. Default 'expense'.",
+        },
+        description: { type: "string", description: "Optional description." },
+      },
+    },
+  },
+  {
+    name: "update_category",
+    description:
+      "Edit an existing category: rename it, change its type/description, or archive/restore it. Use for 'archive Office Supplies' (active=false), 'restore Travel' (active=true), 'rename X to Y' (new_name), or 'make Software a revenue category'. Renaming cascades across booked transactions so history follows the new name. Prefer archiving over deleting — there is no delete.",
+    input_schema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: {
+          type: "string",
+          description: "The category's CURRENT name (the one to edit).",
+        },
+        new_name: { type: "string", description: "New name, if renaming." },
+        type: {
+          type: "string",
+          enum: ["expense", "revenue", "transfer"],
+          description: "New type, if changing.",
+        },
+        description: {
+          type: "string",
+          description: "New description, if changing.",
+        },
+        active: {
+          type: "boolean",
+          description:
+            "false = archive (hide from dropdowns), true = restore.",
+        },
+      },
+    },
+  },
+  {
     name: "show_kpi_summary",
     description:
       "Render a headline KPI tile grid in the dashboard (pending count, YTD spend, outstanding total, recent transaction count). Use when the user asks for an overview / 'how are we doing' / 'state of the books'. Always queries the current state — does not take a date range.",

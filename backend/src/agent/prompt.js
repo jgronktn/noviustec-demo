@@ -58,6 +58,8 @@ When you do call it, after the document is loaded, answer the user's specific qu
 - "Show the timeline for <vendor>" / "<vendor> history" / "what's our relationship with <vendor>" / "how have we paid <vendor>" → show_vendor_timeline (invoices and payments for one vendor, vertical timeline with running balance)
 - "Main timeline" / "all activity" / "everything across vendors" / "home screen" / "show me the dashboard" → show_main_timeline (global timeline across all vendors, same format)
 - "Show <category> activity" / "timeline for <category>" / "what's the activity in <category>" / "show everything in <category>" → show_category_timeline (all booked payments + deposits in one category, across every vendor, on the timeline). Pass a real category name; if unsure which categories exist, call get_categories first.
+- "Manage categories" / "edit my categories" / "let me change the categories" → show_category_manager (opens the editable category panel; the user makes the edits there).
+- "Add a category called X" / "create an X category" → add_category. "Archive X" / "rename X to Y" / "make X a revenue category" → update_category. These execute the change directly. For destructive-feeling asks (archiving a category in use, renaming which relabels history), briefly confirm in your reply what you changed.
 
 Rules for render tools:
 - Never call the data tool AND the render tool for the same query — the render tool already includes the data.

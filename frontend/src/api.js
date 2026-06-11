@@ -50,8 +50,20 @@ export const reparsePending = (token, id) =>
 export const deletePending = (token, id) =>
   request(token, "DELETE", `/api/pending/${encodeURIComponent(id)}`);
 
-export const getCategories = (token) =>
-  request(token, "GET", "/api/categories");
+export const getCategories = (token, { includeArchived = false } = {}) =>
+  request(
+    token,
+    "GET",
+    `/api/categories${includeArchived ? "?include_archived=true" : ""}`,
+  );
+
+/** Add a category. Body: { name, type?, description? }. */
+export const createCategory = (token, body) =>
+  request(token, "POST", "/api/categories", body);
+
+/** Edit a category by current name. Body: { name?, type?, description?, active? }. */
+export const patchCategory = (token, name, body) =>
+  request(token, "PATCH", `/api/categories/${encodeURIComponent(name)}`, body);
 
 export const getPaymentSources = (token) =>
   request(token, "GET", "/api/sources");

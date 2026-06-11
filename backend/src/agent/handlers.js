@@ -11,6 +11,8 @@ import {
   listTransactions,
   listAwaiting,
   getCategories,
+  addCategory,
+  updateCategory,
   getPaymentSources,
   listDocuments,
   listStatements,
@@ -1100,6 +1102,37 @@ export async function runTool(name, input) {
         distinct_vendors: props.summary.distinct_vendors,
         total_paid: props.summary.total_paid,
       };
+    }
+
+    case "show_category_manager": {
+      return {
+        __panel: {
+          kind: "category_manager",
+          title: args.title ?? "Manage categories",
+          props: {},
+        },
+      };
+    }
+
+    case "add_category": {
+      if (!args.name) throw new Error("add_category requires 'name'");
+      const result = await addCategory({
+        name: args.name,
+        type: args.type ?? "expense",
+        description: args.description ?? "",
+      });
+      return result; // { added, name }
+    }
+
+    case "update_category": {
+      if (!args.name) throw new Error("update_category requires 'name'");
+      const result = await updateCategory(args.name, {
+        name: args.new_name,
+        type: args.type,
+        description: args.description,
+        active: args.active,
+      });
+      return result; // { name, old_name, renamed, recategorized, active }
     }
 
     case "show_file_list": {
